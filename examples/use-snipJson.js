@@ -1,9 +1,7 @@
 import snipJson from "../src/snipJson.js";
 
 const input = `
-Random text...
-{ "name": "John", "age": 25, "skills": ["JS", "React"]
-...more text
+Just some text, nothing valid
 `;
 
 const result = snipJson(input);

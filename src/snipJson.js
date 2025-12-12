@@ -34,9 +34,17 @@ function parseJson(data) {
   }
 }
 
+function sanitizeContent(content) {
+  return content
+    .replace(/['"]\s*\+\s*['"]?/g, "") // remove '+ or +" artifacts
+    .replace(/^```json|```$/gm, "") // strip markdown fences
+    .trim();
+}
+
 // Main function to extract and parse JSON from raw text.
 // ------------------------------------------------------
 function snipJson(content) {
+  content = sanitizeContent(content);
   const result = {
     status: "fail", // 'success' | 'check' | 'fail'
     comments: "",
@@ -122,7 +130,7 @@ function snipJson(content) {
     result.comments = "Added missing closing brace. ";
     result.comments += secondParse.success
       ? "Parsing passed"
-      : `But parsing failed. Error: ${secondParse.error}`;
+      : `But parsing failed. Error: ${secondParse.error.message}`;
     result.status = secondParse.success ? "check" : "fail";
     result.data = secondParse.parsedData;
     result.raw = secondParse.success ? null : dataParsed;
@@ -133,7 +141,7 @@ function snipJson(content) {
 
     result.comments = thirdParse.success
       ? "JSON successfully extracted and parsed."
-      : `Extracted candidate JSON passed bracket validation but failed to parse. Check result.raw. Error : ${thirdParse.error}`;
+      : `Extracted candidate JSON passed bracket validation but failed to parse. Check result.raw. Error : ${thirdParse.error.message}`;
     result.status = thirdParse.success ? "success" : "check";
     result.data = thirdParse.success ? thirdParse.parsedData : null;
     result.raw = thirdParse.success ? null : dataParsed;
