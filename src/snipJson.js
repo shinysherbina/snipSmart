@@ -1,152 +1,170 @@
 /**
  * Attempts to extract and parse JSON data from a given string.
  *
- * This function identifies potential JSON structures within a larger text,
- * validates their syntax, and returns a structured result indicating success,
- * partial validity (requiring manual review), or failure.
+ * NOTE:
+ * This is a lightweight JSON recovery utility, not a full JSON repair engine.
+ * It is designed to extract well-formed or near-well-formed JSON from noisy
+ * text (e.g., LLM responses).
  *
- * It handles common issues such as:
+ * It handles:
  * - Leading/trailing non-JSON content
- * - Unmatched braces
- * - Minor formatting issues (e.g., attempts to auto-close one missing brace)
- * Input :
- *  @param {string} content - The input string that may contain embedded JSON data.
- * Output :
- * @returns {Object} result - The result object with the following fields:
- * result.status - Parsing status:
- *   - `"success"` if valid JSON was found and parsed
- *   - `"check"` if a possible JSON structure was recovered with one brace auto-closed, but needs manual review
- *   - `"fail"` if no valid JSON structure could be extracted
- * result.comments - A human-readable message describing what happened during parsing.
- * result.data - The parsed JSON object/array if parsing was successful; otherwise `null`.
- * result.raw - Raw JSON string if parsing failed but an attempt was made (useful for debugging or manual correction); otherwise `null`.
+ * - Embedded JSON objects or arrays
+ * - One missing closing brace/bracket (auto-closure with warning)
  *
- **/
+ * @param {string} content - Input string that may contain JSON.
+ *
+ * @returns {Object} result
+ * @property {"success"|"check"|"fail"} result.status
+ * @property {string} result.comments
+ * @property {any|null} result.data
+ * @property {string|null} result.raw
+ */
 
-// Helper function to safely parse a JSON string and capture errors.
-// -----------------------------------------------------------------
-function parseJson(data) {
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+function parseJsonSafely(text) {
   try {
-    const parsed = JSON.parse(data);
-    return { success: true, parsedData: parsed, error: null };
+    return { success: true, data: JSON.parse(text), error: null };
   } catch (error) {
-    return { success: false, parsedData: null, error: error };
+    return { success: false, data: null, error };
   }
 }
 
 function sanitizeContent(content) {
   return content
-    .replace(/['"]\s*\+\s*['"]?/g, "") // remove '+ or +" artifacts
+    .replace(/['"]\s*\+\s*['"]?/g, "") // remove '+ / +" artifacts
     .replace(/^```json|```$/gm, "") // strip markdown fences
     .trim();
 }
 
-// Main function to extract and parse JSON from raw text.
-// ------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Main
+// -----------------------------------------------------------------------------
+
 function snipJson(content) {
-  content = sanitizeContent(content);
   const result = {
-    status: "fail", // 'success' | 'check' | 'fail'
+    status: "fail",
     comments: "",
     data: null,
     raw: null,
   };
 
-  const braces = { "{": "}", "[": "]" };
-  const opening = Object.keys(braces);
-  const closing = Object.values(braces);
-
-  let stack = [];
-
-  if (!content || typeof content !== "string") {
-    result.comments = "Invalid input: content must be a string.";
+  if (typeof content !== "string" || !content) {
+    result.comments = "Invalid input: content must be a non-empty string.";
     return result;
   }
 
-  // Check 1 : Locate and extract a potential JSON block enclosed in {} or []
-  // -------------------------------------------------------------------------
-  const startingBrace = Math.min(
-    content.indexOf("{") >= 0 ? content.indexOf("{") : Infinity,
-    content.indexOf("[") >= 0 ? content.indexOf("[") : Infinity
-  );
-  const endingBrace = content.lastIndexOf(braces[content[startingBrace]]);
+  content = sanitizeContent(content);
 
-  if (
-    startingBrace === Infinity ||
-    (endingBrace <= startingBrace && endingBrace !== -1)
-  ) {
-    result.comments = "No valid JSON structure found.";
+  const PAIRS = { "{": "}", "[": "]" };
+  const OPENING = Object.keys(PAIRS);
+  const CLOSING = Object.values(PAIRS);
+
+  // ---------------------------------------------------------------------------
+  // Step 1: Locate candidate JSON start
+  // ---------------------------------------------------------------------------
+
+  const firstObject = content.indexOf("{");
+  const firstArray = content.indexOf("[");
+
+  const start =
+    firstObject === -1
+      ? firstArray
+      : firstArray === -1
+      ? firstObject
+      : Math.min(firstObject, firstArray);
+
+  if (start === -1) {
+    result.comments = "No JSON structure found.";
     return result;
   }
 
-  const slice = content.slice(startingBrace, endingBrace + 1);
+  // ---------------------------------------------------------------------------
+  // Step 2: Fast-path parse (simple slice)
+  // ---------------------------------------------------------------------------
 
-  // Parse check
-  const firstParse = parseJson(slice);
-  if (firstParse.success) {
-    result.status = "success";
-    result.comments = "JSON successfully extracted and parsed.";
-    result.data = firstParse.parsedData;
-    return result;
-  } else {
-    result.comments = "Simple slice failed. Proceeding to precise parsing";
+  const expectedClosing = PAIRS[content[start]];
+  const lastClosing = content.lastIndexOf(expectedClosing);
+
+  if (lastClosing > start) {
+    const candidate = content.slice(start, lastClosing + 1);
+    const parsed = parseJsonSafely(candidate);
+
+    if (parsed.success) {
+      result.status = "success";
+      result.comments = "JSON successfully extracted and parsed.";
+      result.data = parsed.data;
+      return result;
+    }
   }
 
-  // Check 2. Validate JSON structure by tracking matched braces using a stack
-  //--------------------------------------------------------------------------
-  let jsonEnd = -1;
-  let dataParsed = null;
+  // ---------------------------------------------------------------------------
+  // Step 3: Stack-based structural validation
+  // ---------------------------------------------------------------------------
 
-  // Loop through the string to match braces
-  for (let i = startingBrace; i < content.length; i++) {
-    jsonEnd = i;
+  const stack = [];
+  let end = -1;
+
+  for (let i = start; i < content.length; i++) {
     const char = content[i];
-    if (opening.includes(char)) stack.push(char);
-    if (closing.includes(char)) {
-      const pair = stack.length > 0 ? stack.pop() : null;
 
-      if (pair === null || braces[pair] !== char) {
-        result.comments = "Bracket mismatch";
-        result.status = "fail";
-        result.data = null;
-        result.raw = content.slice(startingBrace, jsonEnd + 1);
+    if (OPENING.includes(char)) {
+      stack.push(char);
+    } else if (CLOSING.includes(char)) {
+      const last = stack.pop();
+
+      if (!last || PAIRS[last] !== char) {
+        result.comments = "Bracket mismatch detected.";
+        result.raw = content.slice(start, i + 1);
         return result;
+      }
+
+      if (stack.length === 0) {
+        end = i;
+        break;
       }
     }
   }
 
-  // Detect any unmatched opening braces.
-  if (stack.length > 1) {
-    result.comments = "Bracket mismatch";
-    result.status = "fail";
-    result.data = null;
-    result.raw = content.slice(startingBrace, jsonEnd + 1);
-    return result;
-  } else if (stack.length === 1) {
-    // One closing brace is missing.
-    dataParsed =
-      content.slice(startingBrace, jsonEnd + 1) + braces[stack.pop()];
-    const secondParse = parseJson(dataParsed);
-    result.comments = "Added missing closing brace. ";
-    result.comments += secondParse.success
-      ? "Parsing passed"
-      : `But parsing failed. Error: ${secondParse.error.message}`;
-    result.status = secondParse.success ? "check" : "fail";
-    result.data = secondParse.parsedData;
-    result.raw = secondParse.success ? null : dataParsed;
-    return result;
-  } else {
-    dataParsed = content.slice(startingBrace, jsonEnd + 1);
-    const thirdParse = parseJson(dataParsed);
+  if (end === -1) {
+    // Unclosed structure
+    if (stack.length === 1) {
+      const repaired = content.slice(start) + PAIRS[stack.pop()];
+      const parsed = parseJsonSafely(repaired);
 
-    result.comments = thirdParse.success
-      ? "JSON successfully extracted and parsed."
-      : `Extracted candidate JSON passed bracket validation but failed to parse. Check result.raw. Error : ${thirdParse.error.message}`;
-    result.status = thirdParse.success ? "success" : "check";
-    result.data = thirdParse.success ? thirdParse.parsedData : null;
-    result.raw = thirdParse.success ? null : dataParsed;
+      result.comments = parsed.success
+        ? "One missing closing bracket auto-added. Please verify."
+        : `Auto-closure attempted but parsing failed: ${parsed.error.message}`;
+
+      result.status = parsed.success ? "check" : "fail";
+      result.data = parsed.success ? parsed.data : null;
+      result.raw = parsed.success ? null : repaired;
+      return result;
+    }
+
+    result.comments = "Unbalanced JSON structure.";
+    result.raw = content.slice(start);
     return result;
   }
+
+  // ---------------------------------------------------------------------------
+  // Step 4: Final parse after structural validation
+  // ---------------------------------------------------------------------------
+
+  const finalCandidate = content.slice(start, end + 1);
+  const finalParse = parseJsonSafely(finalCandidate);
+
+  result.comments = finalParse.success
+    ? "JSON successfully extracted and parsed."
+    : `Structurally valid JSON failed to parse: ${finalParse.error.message}`;
+
+  result.status = finalParse.success ? "success" : "check";
+  result.data = finalParse.success ? finalParse.data : null;
+  result.raw = finalParse.success ? null : finalCandidate;
+
+  return result;
 }
 
 export default snipJson;

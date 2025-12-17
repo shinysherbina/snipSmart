@@ -1,13 +1,36 @@
 {
-  "name": "src",
+  "name": "snipsmart",
   "version": "1.0.0",
-  "main": "src/index.js",
+  "description": "Extracts clean JSON or tag-wrapped data from messy AI responses. Removes fluff and returns pure structured output.",
   "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
   },
-  "keywords": [],
-  "author": "",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "json",
+    "parser",
+    "ai",
+    "llm",
+    "cleanup",
+    "tags",
+    "utilities",
+    "snippets",
+    "extraction"
+  ],
+  "author": "Shiny Sherbina",
   "license": "MIT",
-  "description": ""
+  "homepage": "https://github.com/shinysherbina/snipsmart#readme",
+  "bugs": {
+    "url": "https://github.com/shinysherbina/snipsmart/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shinysherbina/snipsmart.git"
+  }
 }

@@ -1,104 +1,181 @@
-# snipSmart
+# SnipSmart
 
-Extract clean **JSON** or **HTML/XML** snippets from messy AI outputs or raw text.  
-A lightweight utility with **no dependencies** — just copy the function(s) you need and go.
+![npm](https://img.shields.io/npm/v/snipsmart)
+![npm downloads](https://img.shields.io/npm/dm/snipsmart)
+![license](https://img.shields.io/npm/l/snipsmart)
 
----
+Extract clean **JSON** or **HTML/XML** snippets from messy AI outputs or raw text. A tiny, dependency‑free utility built for MCPs, agents, and AI‑native applications.
 
 ## ✨ Features
 
-- **`snipSmart`** – Unified function that calls either `snipJson` or `snipByTag`
-- **`snipJson`** – Attempts to extract a valid JSON object from a noisy string
-- **`snipByTag`** – Extracts a valid snippet enclosed by matching tags (e.g., `<div>...</div>`)
+- `snipSmart` -- Forgiving parser that extracts JSON or HTML/XML without throwing
+- `snipSmartOrThrow` -- Strict variant that throws unless parsing is fully successful
+- Handles:
 
----
+  - Missing braces
+  - Markdown fences
+  - Leading/trailing noise
+  - Broken or partial tag structures
 
-## 🔧 How to Use
+## 📦 Installation
 
-You can either use the unified function `snipSmart`, or call the individual helpers directly.
+bash
 
-### ✅ Option 1: Use `snipSmart` (recommended)
+```
+npm install snipsmart
 
-```js
-import snipSmart from "./src/index.js";
+```
+
+## 🔧 Usage
+
+SnipSmart exposes **two functions**:
+
+- `snipSmart` → forgiving, never throws
+- `snipSmartOrThrow` → strict, throws on invalid or partial results
+
+## ✅ Option 1: Use `snipSmart` (recommended)
+
+js
+
+```
+import snipSmart from "snipsmart";
 
 const input = `Broken JSON: { "name": "Alice", "age": 30 `;
-const result = snipSmart(input, { format: "json" }); // Or use format: "tag"
+
+const result = snipSmart(input, "json"); // or { format: "json" }
 
 console.log(result);
+/*
+{
+  status: "check",
+  comments: "Added missing closing brace. Parsing passed",
+  data: { name: "Alice", age: 30 },
+  raw: null
+}
+*/
+
 ```
 
-### ✅ Option 2: Use snipJson directly
+`snipSmart` never throws --- perfect for AI pipelines and debugging.
 
-```js
-import snipJson from "./src/snipJson.js";
+## ✅ Option 2: Use `snipSmartOrThrow` (strict)
 
-const input = `Some content with { "key": [1, 2] `;
-const jsonResult = snipJson(input);
+js
 
-console.log(jsonResult);
+```
+import { snipSmartOrThrow } from "snipsmart";
+
+try {
+  const data = snipSmartOrThrow(`{ "x": 1 `, "json");
+  console.log(data);
+} catch (err) {
+  console.log("Error:", err.message);
+}
+
 ```
 
-### ✅ Option 3: Use snipByTag directly
+This variant throws unless:
 
-```js
-import snipByTag from "./src/snipByTag.js";
+Code
 
-const input = `<div><p>Hello <b>World</p>`;
-const htmlSnippet = snipByTag(input);
-
-console.log(htmlSnippet);
 ```
----
+status === "success"
 
-## 📂 Examples
+```
 
-Each file in the 📂 /examples folder shows how to use a function with one working case.
+Ideal for validation, tests, and deterministic workflows.
 
-Run one with:
+## ✅ Extract HTML/XML
+
+js
+
+```
+const tagInput = `
+Random text
+<div><p>Hello <b>World</b></p></div>
+More text
+`;
+
+const result = snipSmart(tagInput, "tag");
+
+console.log(result.data);
+// "<div><p>Hello <b>World</b></p></div>"
+
+```
+
+## 📄 Return Object
+
+Both JSON and TAG modes return:
+
+ts
+
+```
+{
+  status: "success" | "check" | "fail",
+  comments: string,
+  data: any | string | null,
+  raw: string | null
+}
+
+```
+
+- **success** → fully valid
+- **check** → recovered with minor fixes (e.g., missing brace)
+- **fail** → extraction failed
+
+`snipSmartOrThrow` throws on `"check"` and `"fail"`.
+
+## 🧪 Examples
+
+The `/examples` folder contains runnable examples.
+
+Run one:
+
+bash
+
 ```
 node examples/use-snipSmart.js
+
 ```
----
 
-## TestCases
+## 🧩 Test Cases
 
-The folder 📂 /testCases contains manually curated test cases for the `snipSmart` utility and its helper functions.
+The `/testCases` folder includes curated cases for:
 
-Use these to understand, verify, or extend the behavior of:
+- JSON extraction
+- Tag extraction
+- Unified parsing behavior
 
-- 🧩 `snipJson` – Extract valid JSON from noisy text
-- 🏷️ `snipByTag` – Extract valid HTML/XML enclosed by matching tags
-- 🤖 `snipSmart` – Unified wrapper that delegates based on format
+Files include:
 
-### 📄 File Overview
+- `snipJson-cases.md`
+- `snipByTag-cases.md`
+- `snipSmart-cases.md`
 
-| File Name              | Description                                      |
-|------------------------|--------------------------------------------------|
-| `snipJson-cases.md`    | JSON-specific test inputs and expected outputs   |
-| `snipByTag-cases.md`   | HTML/XML tag-based test cases                    |
-| `snipSmart-cases.md`   | Tests format handling and delegation in snipSmart|
+## 🚀 Roadmap
 
-### Contributing
+Planned future extractors:
 
-Want to add more test cases?  
-Just follow the same format and open a pull request!
+- `snipCsv` -- Extract CSV tables
+- `snipCode` -- Extract code blocks
+- Additional formats for broader AI‑output parsing
 
----
+## 🤝 Contributing
 
-## Roadmap & Contributions
-
-### Future Plans
-
-More snippet types (e.g., `snipCsv`, `snipCode`, etc.) are in the pipeline to make `snipSmart` even more versatile.
-
-### Contributions Welcome!
-
-Have an idea, edge case, or improvement? Feel free to open an issue or submit a pull request — we'd love your help!
-
----
+Ideas, edge cases, or improvements are welcome. Open an issue or submit a pull request!
 
 ## 🔓 License
 
-This project is released under the MIT License.
-Use it freely in personal or commercial projects — just keep the license notice.
+MIT © Shiny Sherbina<br>
+Free for personal and commercial use --- just keep the license notice.
+
+## 🌟 Why SnipSmart?
+
+AI models often wrap structured data in explanations, markdown fences, or conversational fluff. SnipSmart extracts **only the useful part**, making it ideal for:
+
+- MCP tools
+- Agent pipelines
+- LLM‑driven backends
+- Any workflow requiring clean, predictable structured output
+
+Lightweight, deterministic, and built for real‑world AI engineering.
