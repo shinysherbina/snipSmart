@@ -36,6 +36,9 @@ function sanitizeContent(content) {
   return content
     .replace(/['"]\s*\+\s*['"]?/g, "") // remove '+ / +" artifacts
     .replace(/^```json|```$/gm, "") // strip markdown fences
+    .replace(/^['"]|['"]$/g, "") // remove outer quotes
+    .replace(/`/g, "") // strip stray backticks
+    .replace(/\\n/g, "\n") // turn escaped \n into real newlines
     .trim();
 }
 
