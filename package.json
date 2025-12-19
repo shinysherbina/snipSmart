@@ -1,6 +1,6 @@
 {
   "name": "snipsmart",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Extracts clean JSON or tag-wrapped data from messy AI responses. Removes fluff and returns pure structured output.",
   "type": "module",
   "main": "src/index.js",
